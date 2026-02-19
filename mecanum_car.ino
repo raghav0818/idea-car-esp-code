@@ -55,32 +55,35 @@ void setMotors(int fl, int fr, int bl, int br) {
 }
 
 // ----- Movement Functions -----
-// Mecanum wheel kinematics:
+// Mecanum wheel kinematics (corrected for axis swap):
 //   FL  FR
 //   BL  BR
 //
-// Forward:      all forward
-// Backward:     all backward
-// Strafe left:  FL back, FR fwd, BL fwd, BR back
-// Strafe right: FL fwd, FR back, BL back, BR fwd
-// Rotate left:  FL back, FR fwd, BL back, BR fwd
-// Rotate right: FL fwd, FR back, BL fwd, BR back
-// Diag FL:      FL stop, FR fwd, BL fwd, BR stop
-// Diag FR:      FL fwd, FR stop, BL stop, BR fwd
-// Diag BL:      FL back, FR stop, BL stop, BR back
-// Diag BR:      FL stop, FR back, BL back, BR stop
+// The physical car has its fwd/back and left/right axes swapped
+// relative to the motor labels, so the motor patterns are remapped:
+//
+// Forward:      FL fwd,  FR back, BL back, BR fwd
+// Backward:     FL back, FR fwd,  BL fwd,  BR back
+// Strafe left:  all backward
+// Strafe right: all forward
+// Rotate left:  FL back, FR fwd,  BL back, BR fwd  (unchanged)
+// Rotate right: FL fwd,  FR back, BL fwd,  BR back (unchanged)
+// Diag FL:      FL stop, FR back, BL back, BR stop
+// Diag FR:      FL fwd,  FR stop, BL stop, BR fwd  (unchanged)
+// Diag BL:      FL back, FR stop, BL stop, BR back (unchanged)
+// Diag BR:      FL stop, FR fwd,  BL fwd,  BR stop
 
 void stopCar()     { setMotors( 0,  0,  0,  0); }
-void forward()     { setMotors( 1,  1,  1,  1); }
-void backward()    { setMotors(-1, -1, -1, -1); }
-void strafeLeft()  { setMotors(-1,  1,  1, -1); }
-void strafeRight() { setMotors( 1, -1, -1,  1); }
+void forward()     { setMotors( 1, -1, -1,  1); }
+void backward()    { setMotors(-1,  1,  1, -1); }
+void strafeLeft()  { setMotors(-1, -1, -1, -1); }
+void strafeRight() { setMotors( 1,  1,  1,  1); }
 void rotateLeft()  { setMotors(-1,  1, -1,  1); }
 void rotateRight() { setMotors( 1, -1,  1, -1); }
-void forwardLeft() { setMotors( 0,  1,  1,  0); }
+void forwardLeft() { setMotors( 0, -1, -1,  0); }
 void forwardRight(){ setMotors( 1,  0,  0,  1); }
 void backLeft()    { setMotors(-1,  0,  0, -1); }
-void backRight()   { setMotors( 0, -1, -1,  0); }
+void backRight()   { setMotors( 0,  1,  1,  0); }
 
 // ----- Web UI -----
 void handleRoot() {
