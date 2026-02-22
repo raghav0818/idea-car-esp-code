@@ -1,3 +1,5 @@
+#include <Arduino.h>
+
 // Omnidirectional 4WD Mecanum RC Car
 // ESP32-S3-WROOM + 2x L298N Motor Drivers
 // WiFi AP mode with web-based controller
