@@ -41,8 +41,8 @@ const int NUM_MOTOR_PINS = sizeof(motorPins) / sizeof(motorPins[0]);
 const int TRIG_PIN = 5;
 const int ECHO_PIN = 6;
 
-// ----- Servo Pin -----
-// >>> CHANGE THIS to match your wiring <<<
+// ----- Servo Pin (MG996R) -----
+// >>> CHANGE THIS to match your wiring <
 const int SERVO_PIN = 4;
 
 Servo lidServo;
@@ -410,7 +410,7 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
 
   // Initialize servo
-  lidServo.attach(SERVO_PIN);
+  lidServo.attach(SERVO_PIN, 500, 2500);  // MG996R pulse range: 500–2500µs
   lidServo.write(LID_CLOSED_ANGLE);  // Start closed
   Serial.println("🔧 Servo initialized at 0° (closed)");
 
