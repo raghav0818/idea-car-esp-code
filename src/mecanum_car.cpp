@@ -11,8 +11,8 @@
 #include <ESP32Servo.h>
 
 // ----- WiFi Credentials -----
-const char* ssid     = "MecanumCar";
-const char* password = "12345678";
+const char* ssid     = "Daniel";
+const char* password = "hellobagia";
 
 WebServer server(80);
 
@@ -39,7 +39,7 @@ const int NUM_MOTOR_PINS = sizeof(motorPins) / sizeof(motorPins[0]);
 // ----- Ultrasonic Sensor Pins -----
 // >>> CHANGE THESE to match your wiring <<<
 const int TRIG_PIN = 5;
-const int ECHO_PIN = 6;
+const int ECHO_PIN = 18;
 
 // ----- Servo Pin (MG996R) -----
 // >>> CHANGE THIS to match your wiring <
@@ -397,13 +397,13 @@ void handleCommand() {
 
 // ----- Setup -----
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
-  // Initialize all motor pins as outputs
-  for (int i = 0; i < NUM_MOTOR_PINS; i++) {
-    pinMode(motorPins[i], OUTPUT);
-    digitalWrite(motorPins[i], LOW);
-  }
+  // Motor pins disabled — not used on ZY-ESP32 board
+  // for (int i = 0; i < NUM_MOTOR_PINS; i++) {
+  //   pinMode(motorPins[i], OUTPUT);
+  //   digitalWrite(motorPins[i], LOW);
+  // }
 
   // Initialize ultrasonic sensor pins
   pinMode(TRIG_PIN, OUTPUT);
@@ -414,19 +414,32 @@ void setup() {
   lidServo.write(LID_CLOSED_ANGLE);  // Start closed
   Serial.println("🔧 Servo initialized at 0° (closed)");
 
-  // Start WiFi Access Point
-  WiFi.softAP(ssid, password);
-  Serial.println("\n========================================");
-  Serial.println("   🦀 Wander-Bin Car Started!");
-  Serial.println("========================================");
-  Serial.print("   WiFi SSID:     ");
-  Serial.println(ssid);
-  Serial.print("   WiFi Password: ");
-  Serial.println(password);
-  Serial.println("----------------------------------------");
-  Serial.print("   📡 ESP32 IP:   http://");
-  Serial.println(WiFi.softAPIP());
-  Serial.println("========================================\n");
+// Connect to WiFi network (Station mode)
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("\nConnecting to WiFi");
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {  // 20 second timeout
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n========================================");
+    Serial.println("   🦀 Wander-Bin Car Started!");
+    Serial.println("========================================");
+    Serial.print("   Connected to:  ");
+    Serial.println(ssid);
+    Serial.println("----------------------------------------");
+    Serial.print("   📡 ESP32 IP:   http://");
+    Serial.println(WiFi.localIP());
+    Serial.println("========================================\n");
+  } else {
+    Serial.println("\n❌ WiFi connection failed!");
+    Serial.println("   Check SSID/password and make sure hotspot is 2.4GHz");
+  }
 
   // Register web routes
   server.on("/", handleRoot);
@@ -469,4 +482,6 @@ void loop() {
     lidIsOpen = false;
     lidAllowOpen = false;  // Reset — require new scan
   }
+
+  delay(50);
 }
