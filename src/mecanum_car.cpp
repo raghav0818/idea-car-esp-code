@@ -1,13 +1,18 @@
+#include <Arduino.h>
+
 // Omnidirectional 4WD Mecanum RC Car
 // ESP32-S3-WROOM + 2x L298N Motor Drivers
 // WiFi AP mode with web-based controller
+// + Lid control via ultrasonic sensor + servo (for Wander-Bin app)
 
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ArduinoJson.h>
+#include <ESP32Servo.h>
 
-// ----- WiFi Credentials -----
-const char* ssid     = "MecanumCar";
-const char* password = "12345678";
+// ----- WiFi AP Credentials -----
+const char* ap_ssid     = "WanderBin-Robot";
+const char* ap_password = "wanderbinpass"; // Must be at least 8 characters
 
 WebServer server(80);
 
@@ -30,6 +35,43 @@ const int motorPins[] = {
   BL_IN1, BL_IN2, BR_IN1, BR_IN2
 };
 const int NUM_MOTOR_PINS = sizeof(motorPins) / sizeof(motorPins[0]);
+
+// ----- Ultrasonic Sensor Pins -----
+// >>> CHANGE THESE to match your wiring <<<
+const int TRIG_PIN = 5;
+const int ECHO_PIN = 18;
+
+// ----- Servo Pin (MG996R) -----
+// >>> CHANGE THIS to match your wiring <
+const int SERVO_PIN = 4;
+
+Servo lidServo;
+
+// ----- Lid Control State -----
+bool lidAllowOpen = false;       // Set by the web app JSON
+bool lidIsOpen = false;           // Current lid position
+String lastItemName = "";
+String lastReason = "";
+
+const float HAND_DISTANCE_CM = 15.0;  // Trigger distance
+const int LID_OPEN_ANGLE = 90;        // Servo angle when open
+const int LID_CLOSED_ANGLE = 0;       // Servo angle when closed
+const unsigned long LID_OPEN_DURATION = 8000;  // Keep lid open for 8 seconds
+
+unsigned long lidOpenedAt = 0;  // Timestamp when lid was opened
+
+// ----- Ultrasonic Helper -----
+float getDistanceCM() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);  // Timeout 30ms (~5m max)
+  if (duration == 0) return -1;  // No echo received
+  return (duration * 0.0343) / 2.0;
+}
 
 // ----- Motor Helper Functions -----
 // Set an individual motor: 1 = forward, -1 = backward, 0 = stop
@@ -55,24 +97,6 @@ void setMotors(int fl, int fr, int bl, int br) {
 }
 
 // ----- Movement Functions -----
-// Mecanum wheel kinematics (corrected for axis swap):
-//   FL  FR
-//   BL  BR
-//
-// The physical car has its fwd/back and left/right axes swapped
-// relative to the motor labels, so the motor patterns are remapped:
-//
-// Forward:      FL fwd,  FR back, BL back, BR fwd
-// Backward:     FL back, FR fwd,  BL fwd,  BR back
-// Strafe left:  all forward
-// Strafe right: all backward
-// Rotate left:  FL fwd,  FR back, BL fwd,  BR back
-// Rotate right: FL back, FR fwd,  BL back, BR fwd
-// Diag FL:      FL fwd,  FR stop, BL stop, BR fwd
-// Diag FR:      FL stop, FR back, BL back, BR stop
-// Diag BL:      FL stop, FR fwd,  BL fwd,  BR stop
-// Diag BR:      FL back, FR stop, BL stop, BR back
-
 void stopCar()     { setMotors( 0,  0,  0,  0); }
 void forward()     { setMotors( 1, -1, -1,  1); }
 void backward()    { setMotors(-1,  1,  1, -1); }
@@ -84,6 +108,91 @@ void forwardLeft() { setMotors( 1,  0,  0,  1); }
 void forwardRight(){ setMotors( 0, -1, -1,  0); }
 void backLeft()    { setMotors( 0,  1,  1,  0); }
 void backRight()   { setMotors(-1,  0,  0, -1); }
+
+// ----- CORS Helper -----
+void sendCORSHeaders() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+// ----- Lid Control Endpoint -----
+// Receives JSON: { "allowOpen": true/false, "itemName": "...", "reason": "..." }
+void handleLidControl() {
+  sendCORSHeaders();
+
+  // Handle preflight OPTIONS request (CORS)
+  if (server.method() == HTTP_OPTIONS) {
+    server.send(204);
+    return;
+  }
+
+  // Parse incoming JSON
+  String body = server.arg("plain");
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, body);
+
+  if (error) {
+    Serial.print("JSON parse error: ");
+    Serial.println(error.c_str());
+    server.send(400, "application/json", "{\"status\":\"error\",\"message\":\"Invalid JSON\"}");
+    return;
+  }
+
+  // Extract fields
+  lidAllowOpen = doc["allowOpen"] | false;
+  lastItemName = doc["itemName"] | "Unknown";
+  lastReason   = doc["reason"]   | "No reason";
+
+  // Print to Serial Monitor
+  Serial.println("──────────────────────────────");
+  Serial.println("📦 Received from Wander-Bin App:");
+  Serial.print("   Item:       "); Serial.println(lastItemName);
+  Serial.print("   Reason:     "); Serial.println(lastReason);
+  Serial.print("   Allow Open: "); Serial.println(lidAllowOpen ? "YES ✅" : "NO ❌");
+  Serial.println("   ✅ Web App → ESP32 connection successful!");
+  Serial.println("──────────────────────────────");
+
+  if (lidAllowOpen) {
+    Serial.println("🔊 Ultrasonic sensor ACTIVATED — waiting for hand within 15cm...");
+  } else {
+    Serial.println("🔒 Lid stays LOCKED.");
+    // Make sure lid is closed if it was open
+    if (lidIsOpen) {
+      lidServo.write(LID_CLOSED_ANGLE);
+      lidIsOpen = false;
+      Serial.println("🔒 Lid closed.");
+    }
+  }
+
+  // Send JSON response back to the web app
+  String response;
+  JsonDocument resDoc;
+  resDoc["status"] = "ok";
+  resDoc["allowOpen"] = lidAllowOpen;
+  resDoc["itemName"] = lastItemName;
+  resDoc["message"] = lidAllowOpen
+    ? "Ultrasonic sensor activated. Wave hand to open lid."
+    : "Lid locked. Item is not recyclable.";
+  serializeJson(resDoc, response);
+
+  server.send(200, "application/json", response);
+}
+
+// ----- Status Endpoint -----
+void handleStatus() {
+  sendCORSHeaders();
+
+  String response;
+  JsonDocument doc;
+  doc["status"] = "online";
+  doc["lidAllowOpen"] = lidAllowOpen;
+  doc["lidIsOpen"] = lidIsOpen;
+  doc["lastItem"] = lastItemName;
+  serializeJson(doc, response);
+
+  server.send(200, "application/json", response);
+}
 
 // ----- Web UI -----
 void handleRoot() {
@@ -267,7 +376,7 @@ void handleRoot() {
   server.send(200, "text/html", html);
 }
 
-// ----- Command Handler -----
+// ----- Command Handler (car movement) -----
 void handleCommand() {
   String move = server.arg("move");
 
@@ -288,28 +397,86 @@ void handleCommand() {
 
 // ----- Setup -----
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
-  // Initialize all motor pins as outputs
-  for (int i = 0; i < NUM_MOTOR_PINS; i++) {
-    pinMode(motorPins[i], OUTPUT);
-    digitalWrite(motorPins[i], LOW);
-  }
+  // Motor pins disabled — not used on ZY-ESP32 board
+  // for (int i = 0; i < NUM_MOTOR_PINS; i++) {
+  //   pinMode(motorPins[i], OUTPUT);
+  //   digitalWrite(motorPins[i], LOW);
+  // }
 
-  // Start WiFi Access Point
-  WiFi.softAP(ssid, password);
-  Serial.println("AP started");
-  Serial.print("IP: ");
-  Serial.println(WiFi.softAPIP());
+  // Initialize ultrasonic sensor pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // Initialize servo
+  lidServo.attach(SERVO_PIN, 500, 2500);  // MG996R pulse range: 500–2500µs
+  lidServo.write(LID_CLOSED_ANGLE);  // Start closed
+  Serial.println("🔧 Servo initialized at 0° (closed)");
+
+// ─── START ACCESS POINT MODE ───
+  Serial.println("\nStarting WiFi Access Point...");
+  
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ap_ssid, ap_password);
+  
+  delay(500); // Give the AP a moment to spin up
+  
+  IPAddress myIP = WiFi.softAPIP(); // Default is usually 192.168.4.1
+
+  Serial.println("\n========================================");
+  Serial.println("   🦀 Wander-Bin Car Started (AP Mode)!");
+  Serial.println("========================================");
+  Serial.print("   📡 Connect your Mac to WiFi: ");
+  Serial.println(ap_ssid);
+  Serial.print("   🔑 Password: ");
+  Serial.println(ap_password);
+  Serial.println("----------------------------------------");
+  Serial.print("   🚀 ESP32 IP:   http://");
+  Serial.println(myIP);
+  Serial.println("========================================\n");
 
   // Register web routes
   server.on("/", handleRoot);
   server.on("/cmd", handleCommand);
+  server.on("/lid-control", HTTP_POST, handleLidControl);
+  server.on("/lid-control", HTTP_OPTIONS, []() {
+    sendCORSHeaders();
+    server.send(204);
+  });
+  server.on("/status", handleStatus);
   server.begin();
-  Serial.println("Server started");
+  Serial.println("✅ Web server started\n");
 }
 
 // ----- Main Loop -----
 void loop() {
   server.handleClient();
+
+  // ── Lid control logic (runs every loop cycle) ──
+  // Only check ultrasonic if the web app said allowOpen = true
+  if (lidAllowOpen && !lidIsOpen) {
+    float distance = getDistanceCM();
+
+    // Valid reading and within range
+    if (distance > 0 && distance <= HAND_DISTANCE_CM) {
+      Serial.print("👋 Hand detected at ");
+      Serial.print(distance, 1);
+      Serial.println(" cm — Opening lid!");
+
+      lidServo.write(LID_OPEN_ANGLE);
+      lidIsOpen = true;
+      lidOpenedAt = millis();
+    }
+  }
+
+  // Auto-close lid after LID_OPEN_DURATION
+  if (lidIsOpen && (millis() - lidOpenedAt >= LID_OPEN_DURATION)) {
+    Serial.println("⏰ Lid open timeout — Closing lid.");
+    lidServo.write(LID_CLOSED_ANGLE);
+    lidIsOpen = false;
+    lidAllowOpen = false;  // Reset — require new scan
+  }
+
+  delay(50);
 }
