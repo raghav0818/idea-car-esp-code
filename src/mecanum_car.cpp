@@ -10,9 +10,9 @@
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
 
-// ----- WiFi Credentials -----
-const char* ssid     = "Daniel";
-const char* password = "hellobagia";
+// ----- WiFi AP Credentials -----
+const char* ap_ssid     = "WanderBin-Robot";
+const char* ap_password = "wanderbinpass"; // Must be at least 8 characters
 
 WebServer server(80);
 
@@ -414,32 +414,27 @@ void setup() {
   lidServo.write(LID_CLOSED_ANGLE);  // Start closed
   Serial.println("🔧 Servo initialized at 0° (closed)");
 
-// Connect to WiFi network (Station mode)
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("\nConnecting to WiFi");
+// ─── START ACCESS POINT MODE ───
+  Serial.println("\nStarting WiFi Access Point...");
   
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 40) {  // 20 second timeout
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(ap_ssid, ap_password);
+  
+  delay(500); // Give the AP a moment to spin up
+  
+  IPAddress myIP = WiFi.softAPIP(); // Default is usually 192.168.4.1
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n========================================");
-    Serial.println("   🦀 Wander-Bin Car Started!");
-    Serial.println("========================================");
-    Serial.print("   Connected to:  ");
-    Serial.println(ssid);
-    Serial.println("----------------------------------------");
-    Serial.print("   📡 ESP32 IP:   http://");
-    Serial.println(WiFi.localIP());
-    Serial.println("========================================\n");
-  } else {
-    Serial.println("\n❌ WiFi connection failed!");
-    Serial.println("   Check SSID/password and make sure hotspot is 2.4GHz");
-  }
+  Serial.println("\n========================================");
+  Serial.println("   🦀 Wander-Bin Car Started (AP Mode)!");
+  Serial.println("========================================");
+  Serial.print("   📡 Connect your Mac to WiFi: ");
+  Serial.println(ap_ssid);
+  Serial.print("   🔑 Password: ");
+  Serial.println(ap_password);
+  Serial.println("----------------------------------------");
+  Serial.print("   🚀 ESP32 IP:   http://");
+  Serial.println(myIP);
+  Serial.println("========================================\n");
 
   // Register web routes
   server.on("/", handleRoot);
