@@ -31,19 +31,22 @@ HTTPClient httpClient;
 // ==========================================
 
 // Motor Driver Pins (as specified by user image reference)
-const int MOT_A_IN1 = 7;
-const int MOT_A_IN2 = 15;
-const int MOT_A_IN3 = 16;
-const int MOT_A_IN4 = 17;
+//Front motor driver
+const int MOT_A_IN1 = 4;
+const int MOT_A_IN2 = 5;
+const int MOT_A_IN3 = 6;
+const int MOT_A_IN4 = 7;
+
+//Back motor driver
 const int MOT_B_IN1 = 11;
 const int MOT_B_IN2 = 12;
 const int MOT_B_IN3 = 13;
 const int MOT_B_IN4 = 14;
 
 // Audio Pins (MAX98357A I2S connection)
-const int I2S_BCLK = 41;
-const int I2S_LRCK = 42;
-const int I2S_DIN  = 2;
+const int I2S_BCLK = 36;
+const int I2S_LRCK = 35;
+const int I2S_DIN  = 37;
 
 // ==========================================
 // --- GLOBAL STATE ---
@@ -154,25 +157,197 @@ void playSound(SoundType type) {
 // ==========================================
 
 const char* rc_html = R"rawliteral(
-<!DOCTYPE html><html><head><title>WanderBin RC</title><meta name="viewport" content="width=device-width, initial-scale=1">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>RC Car Controller</title>
 <style>
-body{text-align:center;background:#222;color:white;font-family:sans-serif;}
-.btn{display:block;width:120px;height:120px;margin:15px auto;background:#4CAF50;color:white;font-size:40px;border:none;border-radius:50%;touch-action:manipulation;user-select:none;}
-.btn:active{background:#ff9800;}
-.row{display:flex;justify-content:center;}
-</style></head><body>
-<h2>WanderBin Mover</h2>
-<button class="btn" onmousedown="move('forward')" onmouseup="move('stop')" ontouchstart="move('forward')" ontouchend="move('stop')">&#8593;</button>
-<div class="row">
-<button class="btn" onmousedown="move('left')" onmouseup="move('stop')" ontouchstart="move('left')" ontouchend="move('stop')">&#8592;</button>
-<button class="btn" style="background:red;" onmousedown="move('stop')" ontouchstart="move('stop')">&#9724;</button>
-<button class="btn" onmousedown="move('right')" onmouseup="move('stop')" ontouchstart="move('right')" ontouchend="move('stop')">&#8594;</button>
-</div>
-<button class="btn" onmousedown="move('backward')" onmouseup="move('stop')" ontouchstart="move('backward')" ontouchend="move('stop')">&#8595;</button>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f0f1a;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  h1 {
+    font-size: 1.3rem;
+    margin: 12px 0 4px;
+    color: #7eb8ff;
+    letter-spacing: 1px;
+  }
+  .status {
+    font-size: 0.75rem;
+    color: #6a6a8a;
+    margin-bottom: 8px;
+  }
+  .status span { color: #4cff9f; }
+  .pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 6px;
+    width: min(85vw, 340px);
+    height: min(85vw, 340px);
+    margin-bottom: 10px;
+  }
+  .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    border: none;
+    border-radius: 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #c8d6e5;
+    cursor: pointer;
+    transition: background 0.1s, transform 0.08s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn svg { width: 28px; height: 28px; margin-bottom: 2px; fill: currentColor; }
+  .btn.dir  { background: #1e2a3a; }
+  .btn.diag { background: #192030; color: #8a9ab5; }
+  .btn.stop { background: #3a1525; color: #ff6b8a; }
+  .btn.rot  { background: #1a2535; color: #7eb8ff; }
+  .btn:active, .btn.active { transform: scale(0.93); }
+  .btn.dir:active,  .btn.dir.active  { background: #2a4060; color: #fff; }
+  .btn.diag:active, .btn.diag.active { background: #253050; color: #c0d0f0; }
+  .btn.stop:active, .btn.stop.active { background: #6a1030; color: #fff; }
+  .btn.rot:active,  .btn.rot.active  { background: #254565; color: #fff; }
+  .rotate-row {
+    display: flex;
+    gap: 6px;
+    width: min(85vw, 340px);
+    justify-content: center;
+  }
+  .rotate-row .btn {
+    width: 48%;
+    height: 54px;
+    border-radius: 14px;
+  }
+  .label { font-size: 0.65rem; opacity: 0.7; margin-top: 1px; }
+  .cmd-display {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #4a5568;
+    height: 1.2em;
+  }
+</style>
+</head>
+<body>
+  <h1>RC CAR CONTROL</h1>
+  <div class="status">WiFi: <span>MecanumCar</span> &middot; 192.168.4.1</div>
+
+  <div class="pad">
+    <button class="btn diag" id="FL">
+      <svg viewBox="0 0 24 24"><path d="M14 3h-4l1.5 1.5L5 11l1.5 1.5L13 6l1.5 1.5z" transform="rotate(-45 12 12)"/></svg>
+      <span class="label">FWD-L</span>
+    </button>
+    <button class="btn dir" id="F">
+      <svg viewBox="0 0 24 24"><path d="M12 4l-6 6h4v6h4v-6h4z"/></svg>
+      <span class="label">FWD</span>
+    </button>
+    <button class="btn diag" id="FR">
+      <svg viewBox="0 0 24 24"><path d="M14 3h-4l1.5 1.5L5 11l1.5 1.5L13 6l1.5 1.5z" transform="rotate(45 12 12)"/></svg>
+      <span class="label">FWD-R</span>
+    </button>
+    <button class="btn dir" id="SL">
+      <svg viewBox="0 0 24 24"><path d="M4 12l6-6v4h6v4h-6v4z"/></svg>
+      <span class="label">LEFT</span>
+    </button>
+    <button class="btn stop" id="S">
+      <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      <span class="label">STOP</span>
+    </button>
+    <button class="btn dir" id="SR">
+      <svg viewBox="0 0 24 24"><path d="M20 12l-6-6v4H8v4h6v4z"/></svg>
+      <span class="label">RIGHT</span>
+    </button>
+    <button class="btn diag" id="BL">
+      <svg viewBox="0 0 24 24"><path d="M14 3h-4l1.5 1.5L5 11l1.5 1.5L13 6l1.5 1.5z" transform="rotate(-135 12 12)"/></svg>
+      <span class="label">BWD-L</span>
+    </button>
+    <button class="btn dir" id="B">
+      <svg viewBox="0 0 24 24"><path d="M12 20l6-6h-4V8H10v6H6z"/></svg>
+      <span class="label">BWD</span>
+    </button>
+    <button class="btn diag" id="BR">
+      <svg viewBox="0 0 24 24"><path d="M14 3h-4l1.5 1.5L5 11l1.5 1.5L13 6l1.5 1.5z" transform="rotate(135 12 12)"/></svg>
+      <span class="label">BWD-R</span>
+    </button>
+  </div>
+
+  <div class="rotate-row">
+    <button class="btn rot" id="RL">
+      <svg viewBox="0 0 24 24"><path d="M12.5 3a9 9 0 0 0-8.5 6h2.2a7 7 0 1 1-.7 5H3.3A9 9 0 1 0 12.5 3z"/><path d="M4 3v6h6L4 3z"/></svg>
+      <span class="label">ROTATE L</span>
+    </button>
+    <button class="btn rot" id="RR">
+      <svg viewBox="0 0 24 24"><path d="M11.5 3a9 9 0 0 1 8.5 6h-2.2a7 7 0 1 0 .7 5h2.2A9 9 0 1 1 11.5 3z"/><path d="M20 3v6h-6l6-6z"/></svg>
+      <span class="label">ROTATE R</span>
+    </button>
+  </div>
+
+  <div class="cmd-display" id="cmdDisplay"></div>
+
 <script>
-function move(dir){fetch('/'+dir);}
-</script></body></html>
+  const display = document.getElementById('cmdDisplay');
+  let activeCmd = 'S';
+
+  function sendCmd(cmd) {
+    if (cmd === activeCmd && cmd !== 'S') return;
+    activeCmd = cmd;
+    display.textContent = cmd === 'S' ? '' : cmd;
+    fetch('/cmd?move=' + cmd).catch(() => {});
+  }
+
+  // Bind all buttons
+  const allIds = ['F','B','SL','SR','RL','RR','FL','FR','BL','BR','S'];
+  allIds.forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+
+    // Mouse events
+    btn.addEventListener('mousedown', e => { e.preventDefault(); sendCmd(id); btn.classList.add('active'); });
+    btn.addEventListener('mouseup',   e => { e.preventDefault(); sendCmd('S'); btn.classList.remove('active'); });
+    btn.addEventListener('mouseleave',e => { if (btn.classList.contains('active')) { sendCmd('S'); btn.classList.remove('active'); } });
+
+    // Touch events
+    btn.addEventListener('touchstart', e => { e.preventDefault(); sendCmd(id); btn.classList.add('active'); });
+    btn.addEventListener('touchend',   e => { e.preventDefault(); sendCmd('S'); btn.classList.remove('active'); });
+    btn.addEventListener('touchcancel',e => { sendCmd('S'); btn.classList.remove('active'); });
+  });
+
+  // Safety: stop if window loses focus
+  window.addEventListener('blur', () => sendCmd('S'));
+</script>
+</body>
+</html>
 )rawliteral";
+
+// ==========================================
+// --- COMMAND HANDLER (From Old UI) ---
+// ==========================================
+void handleCommand() {
+  String move = server.arg("move");
+
+  if      (move == "F")  moveForward();
+  else if (move == "B")  moveBackward();
+  else if (move == "SL" || move == "RL") turnLeft();  // Maps strafe/rotate left to turnLeft
+  else if (move == "SR" || move == "RR") turnRight(); // Maps strafe/rotate right to turnRight
+  else                   stopMotors();
+
+  server.send(200, "text/plain", "OK");
+}
 
 // ==========================================
 // --- SETUP ---
@@ -196,18 +371,21 @@ void setup() {
   Serial.println("🔧 I2S Audio Pins initialized.");
 
   // 1. --- Start Access Point (for RC Driving) ---
+  // THE FIX: Set this AP to 192.168.5.1 so it doesn't conflict with the Brain ESP
+  IPAddress local_ip(192, 168, 5, 1);
+  IPAddress gateway(192, 168, 5, 1);
+  IPAddress subnet(255, 255, 255, 0);
+  WiFi.softAPConfig(local_ip, gateway, subnet);
+
   WiFi.softAP(host_ap_ssid, host_ap_pass);
   Serial.print("📡 Mover AP Started: ");
   Serial.println(host_ap_ssid);
-  Serial.print("🔗 Connect to 192.168.4.1 to Drive.");
+  Serial.println("🔗 Connect to http://192.168.5.1 to Drive.");
 
-  // Register Web Routes
-  server.on("/", [](){ server.send(200, "text/html", rc_html); });
-  server.on("/forward",  [](){ Serial.println("🚗 FWD"); moveForward(); server.send(204); });
-  server.on("/backward", [](){ Serial.println("🚗 BWD"); moveBackward(); server.send(204); });
-  server.on("/left",     [](){ Serial.println("🚗 LEFT"); turnLeft(); server.send(204); });
-  server.on("/right",    [](){ Serial.println("🚗 RIGHT"); turnRight(); server.send(204); });
-  server.on("/stop",     [](){ Serial.println("🚗 STOP"); stopMotors(); server.send(204); });
+  // --- THE NEW ROUTES ---
+  // (Make sure "html" perfectly matches the name of the string variable you pasted!)
+  server.on("/", []() { server.send(200, "text/html", rc_html); });
+  server.on("/cmd", handleCommand);
   
   server.begin();
   Serial.println("✅ Web Server for driving started.");
