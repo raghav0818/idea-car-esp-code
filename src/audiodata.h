@@ -6,7 +6,7 @@
 // ==========================================
 // 1. HAPPY SOUND (Played when lid opens)
 // ==========================================
-const unsigned char rawData_Happy[] PROGMEM = {
+const int16_t rawData_Happy[] PROGMEM = {
   // ---> PASTE ALL THE HAPPY HEX NUMBERS HERE <---
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
@@ -11041,7 +11041,7 @@ const unsigned int rawData_Happy_len = sizeof(rawData_Happy);
 // ==========================================
 // 2. SAD SOUND (Played for non-recyclable items)
 // ==========================================
-const unsigned char rawData_Sad[] PROGMEM = {
+const int16_t rawData_Sad[] PROGMEM = {
   // ---> PASTE ALL THE SAD HEX NUMBERS HERE <---
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
