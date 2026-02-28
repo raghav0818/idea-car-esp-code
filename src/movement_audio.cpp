@@ -252,17 +252,21 @@ void setMotors(int fl, int fr, int bl, int br) {
   setMotor(MOT_B_IN3, MOT_B_IN4, br);
 }
 
-// Exact custom kinematics from your original mecanum_car.cpp!
+// Standard mecanum kinematics (O-configuration):
+//   FL  FR        Forward/Backward: all 4 wheels same direction
+//   BL  BR        Strafe: FL=BR opposite to FR=BL
+//                 Rotate: left side (FL,BL) opposite to right side (FR,BR)
+//                 Diagonal: only 2 diagonal wheels spin (e.g. FWD-R = FR+BL)
 void stopMotors()  { setMotors( 0,  0,  0,  0); }
-void forward()     { setMotors( 1, -1, -1,  1); }
-void backward()    { setMotors(-1,  1,  1, -1); }
-void strafeLeft()  { setMotors( 1,  1,  1,  1); }
-void strafeRight() { setMotors(-1, -1, -1, -1); }
-void rotateLeft()  { setMotors( 1, -1,  1, -1); }
-void rotateRight() { setMotors(-1,  1, -1,  1); }
+void forward()     { setMotors( 1,  1,  1,  1); }
+void backward()    { setMotors(-1, -1, -1, -1); }
+void strafeLeft()  { setMotors( 1, -1, -1,  1); }
+void strafeRight() { setMotors(-1,  1,  1, -1); }
+void rotateLeft()  { setMotors(-1,  1, -1,  1); }
+void rotateRight() { setMotors( 1, -1,  1, -1); }
 void forwardLeft() { setMotors( 1,  0,  0,  1); }
-void forwardRight(){ setMotors( 0, -1, -1,  0); }
-void backLeft()    { setMotors( 0,  1,  1,  0); }
+void forwardRight(){ setMotors( 0,  1,  1,  0); }
+void backLeft()    { setMotors( 0, -1, -1,  0); }
 void backRight()   { setMotors(-1,  0,  0, -1); }
 
 
