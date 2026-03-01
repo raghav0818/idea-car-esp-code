@@ -227,7 +227,7 @@ bool lastRemoteLidIsOpen = false;
 String lastRemoteScannedItem = "";
 
 // ==========================================
-// --- MOTOR MOVEMENT LOGIC (Restored from mecanum_car.cpp) ---
+// --- MOTOR MOVEMENT LOGIC ---
 // ==========================================
 
 // Helper to set individual motors (1 = forward, -1 = backward, 0 = stop)
@@ -246,28 +246,37 @@ void setMotor(int in1, int in2, int dir) {
 
 // Set all four motors: FL (MOT_A 1/2), FR (MOT_A 3/4), BL (MOT_B 1/2), BR (MOT_B 3/4)
 void setMotors(int fl, int fr, int bl, int br) {
-  setMotor(MOT_A_IN1, MOT_A_IN2, fl);
-  setMotor(MOT_A_IN3, MOT_A_IN4, fr);
-  setMotor(MOT_B_IN1, MOT_B_IN2, bl);
-  setMotor(MOT_B_IN3, MOT_B_IN4, br);
+
+  // Logical FL → physical front-left (invert)
+  setMotor(MOT_B_IN3, MOT_B_IN4, -fl);
+
+  // Logical FR → physical front-right (invert)
+  setMotor(MOT_B_IN1, MOT_B_IN2, -fr);
+
+  // Logical BL → physical back-left (normal)
+  setMotor(MOT_A_IN1, MOT_A_IN2, bl);
+
+  // Logical BR → physical back-right (normal)
+  setMotor(MOT_A_IN3, MOT_A_IN4, br);
 }
 
-// Standard mecanum kinematics (O-configuration):
-//   FL  FR        Forward/Backward: all 4 wheels same direction
-//   BL  BR        Strafe: FL=BR opposite to FR=BL
-//                 Rotate: left side (FL,BL) opposite to right side (FR,BR)
-//                 Diagonal: only 2 diagonal wheels spin (e.g. FWD-R = FR+BL)
+// Standard Mecanum Kinematics
 void stopMotors()  { setMotors( 0,  0,  0,  0); }
+
 void forward()     { setMotors( 1,  1,  1,  1); }
 void backward()    { setMotors(-1, -1, -1, -1); }
-void strafeLeft()  { setMotors( 1, -1, -1,  1); }
-void strafeRight() { setMotors(-1,  1,  1, -1); }
+
+void strafeLeft()  { setMotors(-1,  1,  1, -1); }
+void strafeRight() { setMotors( 1, -1, -1,  1); }
+
 void rotateLeft()  { setMotors(-1,  1, -1,  1); }
 void rotateRight() { setMotors( 1, -1,  1, -1); }
-void forwardLeft() { setMotors( 1,  0,  0,  1); }
-void forwardRight(){ setMotors( 0,  1,  1,  0); }
-void backLeft()    { setMotors( 0, -1, -1,  0); }
-void backRight()   { setMotors(-1,  0,  0, -1); }
+
+void forwardLeft() { setMotors( 0,  1,  1,  0); }
+void forwardRight(){ setMotors( 1,  0,  0,  1); }
+
+void backLeft()    { setMotors(-1,  0,  0, -1); }
+void backRight()   { setMotors( 0, -1, -1,  0); }
 
 
 // ==========================================
